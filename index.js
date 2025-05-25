@@ -32,7 +32,7 @@ class Word {
   constructor() {
     this.word = wordsList[Math.floor(Math.random() * n)];
     this.typedLetters = "";
-    this.x = -(word.length * fontSize);
+    this.x = -(this.word.length * fontSize);
     this.y = Math.floor(Math.random() * (h - 2 * fontSize)) + fontSize;
   }
   update() {
