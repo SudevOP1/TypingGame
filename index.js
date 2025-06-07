@@ -11,15 +11,20 @@ let wordCol = "#394760";
 let bgCol = "#0B0E13";
 let typedCol = "#9FADC6";
 let redCol = "#FF0000";
+let words = [];
 let typedWords = 0;
 let errors = 0;
-let words = [];
+let startTime = Date.now();
+let endTime = Date.now();
 let wordsList = [];
 let n = wordsList.length;
-let startTime = Date.now();
-let typeSound = new Audio("src/type.mp3")
-let errorSound = new Audio("src/error.mp3")
+let typeSound = new Audio("src/type.mp3");
+let errorSound = new Audio("src/error.mp3");
+typeSound.volume = 0.4;
+errorSound.volume = 0.4;
+let gameState = "gameMenu"; // "gameMenu" -> "playing" <-> "gameOver"
 
+// get words list then animate
 fetch("words.json")
   .then((resp) => resp.json())
   .then((data) => {
@@ -29,11 +34,15 @@ fetch("words.json")
   });
 
 class Word {
-  constructor() {
-    this.word = wordsList[Math.floor(Math.random() * n)];
+  constructor(
+    word = wordsList[Math.floor(Math.random() * n)],
+    x = -(word.length * fontSize),
+    y = Math.floor(Math.random() * (h - 2 * fontSize)) + fontSize
+  ) {
+    this.word = word;
     this.typedLetters = "";
-    this.x = -(word.length * fontSize);
-    this.y = Math.floor(Math.random() * (h - 2 * fontSize)) + fontSize;
+    this.x = x;
+    this.y = y;
   }
   update() {
     this.x += wordSpeed;
@@ -62,39 +71,74 @@ class Word {
   isCompleted() {
     return this.word.length === 0;
   }
+  isOutOfScreen() {
+    return this.x > w;
+  }
 }
 
-function getTime() {
-  return Math.floor((Date.now() - startTime) / 1000); // in seconds
-}
+let startWord = new Word(
+  "start",
+  w / 2 - 2.5 * fontSize,
+  h / 2 - 0.5 * fontSize
+);
 
 function isSpawnable() {
-  // true if no words or last word > maxDistToSpawn
+  // true if (no words on screen) or (last word position > maxDistToSpawn)
   return words.length === 0 || words[words.length - 1].x >= maxDistToSpawn;
 }
 
-function playTypeSound() {
-  typeSound.currentTime = 0;
-  typeSound.play();
-}
-
-function playErrorSound() {
-  errorSound.currentTime = 0;
-  errorSound.play();
-}
-
-document.addEventListener("keydown", function (event) {
-  if(words[0].type(event.key.toLowerCase())) {
-    playTypeSound();
-  } else {
-    playErrorSound();
-    errors++;
+function playSound(sound) {
+  if (sound === "type") {
+    typeSound.currentTime = 0;
+    typeSound.play();
+    return;
   }
-});
+  if (sound === "error") {
+    errorSound.currentTime = 0;
+    errorSound.play();
+    return;
+  }
+}
 
-function animate() {
-  c.fillStyle = bgCol;
-  c.fillRect(0, 0, canvas.width, canvas.height);
+function resetVars() {
+  words = [];
+  typedWords = 0;
+  errors = 0;
+  wordSpeed = 2;
+  startTime = Date.now();
+}
+
+function drawGameMenu() {
+  startWord.draw();
+  if (startWord.isCompleted()) {
+    resetVars();
+    gameState = "playing";
+  }
+}
+
+function drawGameOverScreen() {
+  drawGameMenu();
+
+  let scores = [
+    `Words typed:         ${typedWords}`,
+    `Wrong letters typed: ${errors}`,
+    `Time lasted:         ${parseInt((endTime - startTime) / 1000)}s`,
+  ];
+
+  for (let i = 0; i < scores.length; i++) {
+    c.fillText(scores[i], fontSize, 2.5 * fontSize + i * 2 * fontSize);
+  }
+}
+
+function drawGame() {
+  // check game over
+  if (words.length > 0 && words[0].isOutOfScreen()) {
+    gameState = "gameOver";
+    endTime = Date.now();
+    startWord.word = "restart";
+    startWord.typedLetters = "";
+    return;
+  }
 
   // remove typed words
   prevLength = words.length;
@@ -107,6 +151,9 @@ function animate() {
     lastSpawnTime = Date.now();
   }
 
+  // increase wordSpeed gradually
+  wordSpeed = 2 + ((Date.now() - startTime) * 0.02) / 1000;
+
   // draw words
   for (let word of words) {
     word.update();
@@ -116,5 +163,37 @@ function animate() {
   // draw total words typed
   c.fillStyle = redCol;
   c.fillText(String(typedWords), w - 4 * fontSize, 5 + 2 * fontSize);
+}
+
+document.addEventListener("keydown", function (event) {
+  if (gameState === "gameMenu" || gameState === "gameOver") {
+    if (startWord.type(event.key.toLowerCase())) {
+      playSound("type");
+    } else {
+      playSound("error");
+    }
+  } else if (gameState === "playing") {
+    if (words[0].type(event.key.toLowerCase())) {
+      playSound("type");
+    } else {
+      playSound("error");
+      errors++;
+    }
+  }
+});
+
+function animate() {
+  // clear bg
+  c.fillStyle = bgCol;
+  c.fillRect(0, 0, canvas.width, canvas.height);
+
+  if (gameState === "gameMenu") {
+    drawGameMenu();
+  } if (gameState === "playing") {
+    drawGame();
+  } if (gameState === "gameOver") {
+    drawGameOverScreen();
+  }
+
   requestAnimationFrame(animate);
 }
